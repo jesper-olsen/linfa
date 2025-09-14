@@ -1,7 +1,7 @@
 //! Linear decision trees
 //!
 use std::cmp::Ordering;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::{Hash, Hasher};
 
 use linfa::dataset::AsSingleTargets;
@@ -431,7 +431,7 @@ impl<F: Float, L: Label + std::fmt::Debug> TreeNode<F, L> {
 /// ### Structure
 /// A decision tree structure is a binary tree where:
 /// * Each internal node specifies a decision, represented by a choice of a feature and a "split value" such that all observations for which
-///     `feature <= split_value` is true fall in the left subtree, while the others fall in the right subtree.
+///   `feature <= split_value` is true fall in the left subtree, while the others fall in the right subtree.
 ///
 /// * leaf nodes make predictions, and their prediction is the most popular label in the node
 ///
@@ -523,7 +523,13 @@ where
     /// a matrix of features `x` and an array of labels `y`.
     fn fit(&self, dataset: &DatasetBase<ArrayBase<D, Ix2>, T>) -> Result<Self::Object> {
         let x = dataset.records();
-        let feature_names = dataset.feature_names();
+        let feature_names = if dataset.feature_names().is_empty() {
+            (0..x.nfeatures())
+                .map(|idx| format!("feature-{idx}"))
+                .collect()
+        } else {
+            dataset.feature_names().to_vec()
+        };
         let all_idxs = RowMask::all(x.nrows());
         let sorted_indices: Vec<_> = (0..(x.ncols()))
             .map(|feature_idx| {
@@ -547,7 +553,7 @@ impl<F: Float, L: Label> DecisionTree<F, L> {
         // queue of nodes yet to explore
         let queue = vec![&self.root_node];
 
-        NodeIter::new(queue)
+        NodeIter::new(VecDeque::from(queue))
     }
 
     /// Return features_idx of this tree (BFT)

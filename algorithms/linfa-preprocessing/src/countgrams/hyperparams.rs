@@ -7,6 +7,8 @@ use std::collections::HashSet;
 #[cfg(feature = "serde")]
 use serde_crate::{Deserialize, Serialize};
 
+use super::{Tokenizer, Tokenizerfp};
+
 #[derive(Clone, Debug)]
 #[cfg(not(feature = "serde"))]
 struct SerdeRegex(Regex);
@@ -49,11 +51,11 @@ impl SerdeRegex {
 /// they will still be used by the [CountVectorizer](crate::CountVectorizer) to transform any text to be examined.
 ///
 /// * `split_regex`: the regex espression used to split decuments into tokens. Defaults to r"\\b\\w\\w+\\b", which selects "words", using whitespaces and
-///     punctuation symbols as separators.
+///   punctuation symbols as separators.
 /// * `convert_to_lowercase`: if true, all documents used for fitting will be converted to lowercase. Defaults to `true`.
 /// * `n_gram_range`: if set to `(1,1)` single tokens will be candidate vocabulary entries, if `(2,2)` then adjacent token pairs will be considered,
-///    if `(1,2)` then both single tokens and adjacent token pairs will be considered, and so on. The definition of token depends on the
-///    regex used fpr splitting the documents. The default value is `(1,1)`.
+///   if `(1,2)` then both single tokens and adjacent token pairs will be considered, and so on. The definition of token depends on the
+///   regex used fpr splitting the documents. The default value is `(1,1)`.
 /// * `normalize`: if true, all charachters in the documents used for fitting will be normalized according to unicode's NFKD normalization. Defaults to `true`.
 /// * `document_frequency`: specifies the minimum and maximum (relative) document frequencies that each vocabulary entry must satisfy. Defaults to `(0., 1.)` (i.e. 0% minimum and 100% maximum)
 /// * `stopwords`: optional list of entries to be excluded from the generated vocabulary. Defaults to `None`
@@ -71,9 +73,21 @@ pub struct CountVectorizerValidParams {
     normalize: bool,
     document_frequency: (f32, f32),
     stopwords: Option<HashSet<String>>,
+    max_features: Option<usize>,
+    #[cfg_attr(feature = "serde", serde(skip))]
+    pub(crate) tokenizer_function: Option<Tokenizerfp>,
+    pub(crate) tokenizer_deserialization_guard: bool,
 }
 
 impl CountVectorizerValidParams {
+    pub fn tokenizer_function(&self) -> Option<Tokenizerfp> {
+        self.tokenizer_function
+    }
+
+    pub fn max_features(&self) -> Option<usize> {
+        self.max_features
+    }
+
     pub fn convert_to_lowercase(&self) -> bool {
         self.convert_to_lowercase
     }
@@ -117,20 +131,41 @@ impl std::default::Default for CountVectorizerParams {
             normalize: true,
             document_frequency: (0., 1.),
             stopwords: None,
+            max_features: None,
+            tokenizer_function: None,
+            tokenizer_deserialization_guard: false,
         })
     }
 }
 
 impl CountVectorizerParams {
-    ///If true, all documents used for fitting will be converted to lowercase.
-    pub fn convert_to_lowercase(mut self, convert_to_lowercase: bool) -> Self {
-        self.0.convert_to_lowercase = convert_to_lowercase;
+    // Set the tokenizer as either a function pointer or a regex
+    // If this method is not called, the default is to use regex "\b\w\w+\b"
+    pub fn tokenizer(mut self, tokenizer: Tokenizer) -> Self {
+        match tokenizer {
+            Tokenizer::Function(fp) => {
+                self.0.tokenizer_function = Some(fp);
+                self.0.tokenizer_deserialization_guard = true;
+            }
+            Tokenizer::Regex(regex_str) => {
+                self.0.split_regex_expr = regex_str.to_string();
+                self.0.tokenizer_deserialization_guard = false;
+            }
+        }
+
         self
     }
 
-    /// Sets the regex espression used to split decuments into tokens
-    pub fn split_regex(mut self, regex_str: &str) -> Self {
-        self.0.split_regex_expr = regex_str.to_string();
+    /// When building the vocabulary, only consider the top max_features (by term frequency).
+    /// If None, all features are used.
+    pub fn max_features(mut self, max_features: Option<usize>) -> Self {
+        self.0.max_features = max_features;
+        self
+    }
+
+    ///If true, all documents used for fitting will be converted to lowercase.
+    pub fn convert_to_lowercase(mut self, convert_to_lowercase: bool) -> Self {
+        self.0.convert_to_lowercase = convert_to_lowercase;
         self
     }
 

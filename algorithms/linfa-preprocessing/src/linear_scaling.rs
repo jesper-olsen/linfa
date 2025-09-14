@@ -136,11 +136,10 @@ impl<F: Float> std::fmt::Display for ScalingMethod<F> {
         match self {
             ScalingMethod::Standard(with_mean, with_std) => write!(
                 f,
-                "Standard scaler (with_mean = {}, with_std = {})",
-                with_mean, with_std
+                "Standard scaler (with_mean = {with_mean}, with_std = {with_std})"
             ),
             ScalingMethod::MinMax(min, max) => {
-                write!(f, "Min-Max scaler (min = {}, max = {})", min, max)
+                write!(f, "Min-Max scaler (min = {min}, max = {max})")
             }
             ScalingMethod::MaxAbs => write!(f, "MaxAbs scaler"),
         }
@@ -307,12 +306,14 @@ impl<F: Float, D: Data<Elem = F>, T: AsTargets>
     /// Substitutes the records of the dataset with their scaled version.
     /// Panics if the shape of the records is not compatible with the shape of the dataset used for fitting.
     fn transform(&self, x: DatasetBase<ArrayBase<D, Ix2>, T>) -> DatasetBase<Array2<F>, T> {
-        let feature_names = x.feature_names();
+        let feature_names = x.feature_names().to_vec();
+        let target_names = x.target_names().to_vec();
         let (records, targets, weights) = (x.records, x.targets, x.weights);
         let records = self.transform(records.to_owned());
         DatasetBase::new(records, targets)
             .with_weights(weights)
             .with_feature_names(feature_names)
+            .with_target_names(target_names)
     }
 }
 
@@ -575,7 +576,7 @@ mod tests {
     #[test]
     fn test_retain_feature_names() {
         let dataset = linfa_datasets::diabetes();
-        let original_feature_names = dataset.feature_names();
+        let original_feature_names = dataset.feature_names().to_vec();
         let transformed = LinearScaler::standard()
             .fit(&dataset)
             .unwrap()

@@ -126,6 +126,7 @@ fn main() {
     // Transforming gives a sparse dataset, we make it dense in order to be able to fit the Naive Bayes model
     let training_records = vectorizer
         .transform_files(&training_filenames, ISO_8859_1, Strict)
+        .unwrap()
         .to_dense();
     // Currently linfa only allows real valued features so we have to transform the integer counts to floats
     let training_records = training_records.mapv(|c| c as f32);
@@ -149,7 +150,7 @@ fn main() {
         .unwrap();
     // 0.9944
     let accuracy = cm.f1_score();
-    println!("The fitted model has a training f1 score of {}", accuracy);
+    println!("The fitted model has a training f1 score of {accuracy}");
 
     // --- Test set
 
@@ -164,6 +165,7 @@ fn main() {
     );
     let test_records = vectorizer
         .transform_files(&test_filenames, ISO_8859_1, Strict)
+        .unwrap()
         .to_dense();
     let test_records = test_records.mapv(|c| c as f32);
     let test_dataset: Dataset<f32, usize, Ix1> = (test_records, test_targets).into();
@@ -172,7 +174,7 @@ fn main() {
     let cm = test_prediction.confusion_matrix(&test_dataset).unwrap();
     // 0.9523
     let accuracy = cm.f1_score();
-    println!("The model has a test f1 score of {}", accuracy);
+    println!("The model has a test f1 score of {accuracy}");
 
     delete_20news_bydate();
 }
